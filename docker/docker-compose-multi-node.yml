@@ -1,0 +1,154 @@
+version: '3'
+services:
+  cassandra:
+    image: cassandra:4.1.1
+    ports:
+      - "9042:9042"
+    environment:
+      - "MAX_HEAP_SIZE=256M"
+      - "HEAP_NEWSIZE=128M"
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u cassandra", "-p cassandra" ,"-e describe keyspaces"]
+      interval: 15s
+      timeout: 30s
+      retries: 10
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus:/etc/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - '9090:9090'
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - '9100:9100'
+  cadence-frontend:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "8000:8000"
+      - "7933:7933"
+      - "7833:7833"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8000"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=frontend"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-history-1:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "7934"
+      - "7834"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8002"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=history"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-history-2:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "7944"
+      - "7854"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "HISTORY_PORT=7944"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8002"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=history"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-matching-1:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "7935"
+      - "7835"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8001"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=matching"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-matching-2:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "7945"
+      - "7855"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "MATCHING_PORT=7945"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8001"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=matching"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-worker:
+    image: ubercadence/server:master-auto-setup
+    ports:
+      - "8003:8003"
+      - "7939:7939"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "PROMETHEUS_ENDPOINT=0.0.0.0:8003"
+      - "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml"
+      - "RINGPOP_SEEDS=127.0.0.1:7933,127.0.0.1:7934,127.0.0.1:7935,127.0.0.1:7944,127.0.0.1:7945"
+      - "SERVICES=worker"
+      - "LOG_LEVEL=debug"
+      - "PRIMARY_FRONTEND_SERVICE=127.0.0.1"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+  cadence-web:
+    image: ubercadence/web:latest
+    environment:
+      - "CADENCE_TCHANNEL_PEERS=cadence:7933"
+    ports:
+      - "8088:8088"
+    depends_on:
+      - cadence-frontend
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - ./grafana:/etc/grafana
+    user: "1000"
+    depends_on:
+      - prometheus
+    ports:
+      - '3000:3000'
